@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotify -> MP3 Library Manager</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">♪</div>
+      <div>
+        <h1>Spotify -> MP3 Library Manager</h1>
+        <p>Manage data/songs.json, preview local MP3s & inspect YouTube matches</p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <input type="search" id="searchInput" placeholder="Search song, artist, YouTube title, or #ID..." />
+      <select id="filterSelect">
+        <option value="all">All Songs</option>
+        <option value="matched">Verified Title Match</option>
+        <option value="mismatch">Potential Mismatch (Review)</option>
+      </select>
+      <button class="btn" id="toggleViewBtn">Grid View</button>
+      <label class="btn" for="importFile" style="cursor:pointer;">Import JSON</label>
+      <input type="file" id="importFile" accept=".json" style="display:none;" />
+      <button class="btn btn-primary" id="exportBtn">Save songs.json</button>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-pill">Total Songs: <strong id="statTotal">0</strong></div>
+    <div class="stat-pill">Showing: <strong id="statShowing">0</strong></div>
+    <div class="stat-pill warn">Potential Mismatches: <strong id="statMismatch">0</strong></div>
+  </div>
+
+  <main>
+    <div class="table-wrap" id="tableView">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th class="thumb-cell">Cover</th>
+            <th>Spotify Song & Artist</th>
+            <th>YouTube Downloaded Title</th>
+            <th>YouTube Link</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <div class="grid-wrap" id="gridView"></div>
+  </main>
+
+  <div class="player-bar">
+    <div class="now-playing">
+      <img id="npThumb" src="" alt="" style="display:none;" />
+      <div class="np-meta">
+        <div class="np-title" id="npTitle">Select any song to play</div>
+        <div class="np-artist" id="npArtist">Local MP3 from ./media/songs/</div>
+      </div>
+    </div>
+    <div class="player-controls">
+      <button class="btn btn-sm" id="prevBtn">⏮</button>
+      <audio id="audioPlayer" controls preload="none"></audio>
+      <button class="btn btn-sm" id="nextBtn">⏭</button>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal-backdrop" id="editModal">
+    <div class="modal">
+      <h2 id="modalTitle">Edit Song</h2>
+      <input type="hidden" id="editId" />
+      <div class="form-group">
+        <label>Song Name</label>
+        <input type="text" id="editName" />
+      </div>
+      <div class="form-group">
+        <label>Artist</label>
+        <input type="text" id="editArtist" />
+      </div>
+      <div class="form-group">
+        <label>YouTube Title</label>
+        <input type="text" id="editYtTitle" />
+      </div>
+      <div class="form-group">
+        <label>YouTube Link</label>
+        <input type="text" id="editYtLink" />
+      </div>
+      <div class="form-group">
+        <label>Thumbnail Path</label>
+        <input type="text" id="editThumbnail" />
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="deleteSongBtn" style="color:var(--danger);margin-right:auto;">Delete</button>
+        <button class="btn" id="cancelEditBtn">Cancel</button>
+        <button class="btn btn-primary" id="saveEditBtn">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fallback data for direct file:// opening without a web server -->
+  <script src="data/songs_data.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>
