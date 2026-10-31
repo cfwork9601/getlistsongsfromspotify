@@ -14,8 +14,10 @@ getlistsongsfromspotify/
 │   ├── style.css
 │   └── app.js
 ├── data/                       # Catalog data & raw playlist imports
-│   ├── songs.json              # Master JSON list of songs, YouTube links & thumbnails
+│   ├── songs.json              # Master JSON list of songs, flags, YouTube links & thumbnails
 │   ├── songs_data.js           # Auto-generated JS fallback for direct file:// opening
+│   ├── notes.json              # 1-to-N notes for songs (what needs changing / to-do items)
+│   ├── notes_data.js           # Auto-generated JS fallback for notes over file://
 │   └── imports/                # Raw Spotify exports
 │       ├── result.txt          # Numbered "1. Song - Artist" list
 │       ├── list.txt            # Raw HTML snippet from Spotify DOM
@@ -104,17 +106,31 @@ python3 scripts/build_metadata.py
 
 ---
 
-## JSON Schema (`data/songs.json`)
+## JSON Schema
 
+### `data/songs.json`
 ```json
 [
   {
     "id": 1,
+    "flag": "ok",
     "name": "busy doing nothing",
     "Artist": "Muse Petal",
     "yt_title": "busy doing nothing",
     "yt_link": "https://www.youtube.com/watch?v=yo5eCuzFucc",
     "thumbnail": "/run/media/thanhtuan/STORAGE/Projects/getlistsongsfromspotify/media/thumbnails/001. busy doing nothing - Muse Petal.jpg"
+  }
+]
+```
+
+### `data/notes.json` (1-to-N relationship with songs)
+```json
+[
+  {
+    "id": 1730394800000,
+    "song_id": 2,
+    "text": "Check audio quality / replace with official acoustic version",
+    "created_at": "2026-10-31T13:15:00.000Z"
   }
 ]
 ```

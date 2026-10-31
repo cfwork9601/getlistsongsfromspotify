@@ -1,6 +1,8 @@
 let songs = [];
+let notes = [];
 let filteredSongs = [];
 let currentPlayingId = null;
+let currentNoteSongId = null;
 let isGridView = false;
 
 const tableBody = document.getElementById('tableBody');
@@ -13,6 +15,34 @@ const audioPlayer = document.getElementById('audioPlayer');
 const npThumb = document.getElementById('npThumb');
 const npTitle = document.getElementById('npTitle');
 const npArtist = document.getElementById('npArtist');
+
+// Notes Modal Elements
+const notesModal = document.getElementById('notesModal');
+const notesModalTitle = document.getElementById('notesModalTitle');
+const notesModalFlagWrap = document.getElementById('notesModalFlagWrap');
+const notesList = document.getElementById('notesList');
+const newNoteText = document.getElementById('newNoteText');
+const addNoteBtn = document.getElementById('addNoteBtn');
+const closeNotesModalBtn = document.getElementById('closeNotesModalBtn');
+
+// Edit Modal Elements
+const editModal = document.getElementById('editModal');
+const editId = document.getElementById('editId');
+const editFlag = document.getElementById('editFlag');
+const editName = document.getElementById('editName');
+const editArtist = document.getElementById('editArtist');
+const editYtTitle = document.getElementById('editYtTitle');
+const editYtLink = document.getElementById('editYtLink');
+const editThumbnail = document.getElementById('editThumbnail');
+
+function saveToLocalStorage() {
+  try {
+    localStorage.setItem('gls_songs', JSON.stringify(songs));
+    localStorage.setItem('gls_notes', JSON.stringify(notes));
+  } catch (e) {
+    // Ignore storage quota errors
+  }
+}
 
 function getRelativeThumb(thumbPath) {
   if (!thumbPath) return '';
@@ -56,7 +86,25 @@ function isLikelyMatch(item) {
   return false;
 }
 
-async function loadSongs() {
+function getSongNotes(songId) {
+  return notes.filter(n => n.song_id === songId);
+}
+
+async function loadData() {
+  // 1. Try local storage first for working drafts
+  const localSongs = localStorage.getItem('gls_songs');
+  const localNotes = localStorage.getItem('gls_notes');
+
+  if (localSongs && localNotes) {
+    try {
+      songs = JSON.parse(localSongs);
+      notes = JSON.parse(localNotes);
+      applyFilters();
+      return;
+    } catch (e) {}
+  }
+
+  // 2. Fetch songs.json
   try {
     const res = await fetch('data/songs.json');
     if (res.ok) {
@@ -65,10 +113,27 @@ async function loadSongs() {
       songs = window.SONGS_DATA;
     }
   } catch (e) {
-    if (window.SONGS_DATA) {
-      songs = window.SONGS_DATA;
-    }
+    if (window.SONGS_DATA) songs = window.SONGS_DATA;
   }
+
+  // Ensure default flag
+  songs.forEach(s => {
+    if (!s.flag) s.flag = 'ok';
+  });
+
+  // 3. Fetch notes.json
+  try {
+    const resNotes = await fetch('data/notes.json');
+    if (resNotes.ok) {
+      notes = await resNotes.json();
+    } else if (window.NOTES_DATA) {
+      notes = window.NOTES_DATA;
+    }
+  } catch (e) {
+    if (window.NOTES_DATA) notes = window.NOTES_DATA;
+  }
+
+  saveToLocalStorage();
   applyFilters();
 }
 
@@ -77,25 +142,38 @@ function applyFilters() {
   const mode = filterSelect.value;
 
   let mismatchCount = 0;
+  let workNeededCount = 0;
+
   songs.forEach(s => {
     s._matched = isLikelyMatch(s);
     if (!s._matched) mismatchCount++;
+    if (s.flag === 'work needed') workNeededCount++;
   });
 
   filteredSongs = songs.filter(s => {
+    if (mode === 'work_needed' && s.flag !== 'work needed') return false;
+    if (mode === 'flag_ok' && s.flag !== 'ok') return false;
+    if (mode === 'has_notes' && getSongNotes(s.id).length === 0) return false;
     if (mode === 'matched' && !s._matched) return false;
     if (mode === 'mismatch' && s._matched) return false;
+
     if (!q) return true;
+
+    // Search query matches song metadata or attached notes
+    const songNotesText = getSongNotes(s.id).map(n => n.text).join(' ').toLowerCase();
     return (
       String(s.id).includes(q) ||
       (s.name || '').toLowerCase().includes(q) ||
       (s.Artist || '').toLowerCase().includes(q) ||
-      (s.yt_title || '').toLowerCase().includes(q)
+      (s.yt_title || '').toLowerCase().includes(q) ||
+      songNotesText.includes(q)
     );
   });
 
   document.getElementById('statTotal').textContent = songs.length;
   document.getElementById('statShowing').textContent = filteredSongs.length;
+  document.getElementById('statWorkNeeded').textContent = workNeededCount;
+  document.getElementById('statNotes').textContent = notes.length;
   document.getElementById('statMismatch').textContent = mismatchCount;
 
   render();
@@ -109,6 +187,21 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function renderFlagBadge(item) {
+  const isWork = item.flag === 'work needed';
+  const cls = isWork ? 'flag-work' : 'flag-ok';
+  const text = isWork ? '⚠️ Work Needed' : '✅ OK';
+  return `<span class="flag-pill ${cls}" onclick="toggleFlag(${item.id})" title="Click to toggle Flag">${text}</span>`;
+}
+
+function renderNotesButton(item) {
+  const songNotes = getSongNotes(item.id);
+  const count = songNotes.length;
+  const cls = count > 0 ? 'notes-btn has-notes' : 'notes-btn';
+  const label = count > 0 ? `📝 ${count} note${count > 1 ? 's' : ''}` : `+ Note`;
+  return `<button class="${cls}" onclick="openNotesModal(${item.id})">${label}</button>`;
+}
+
 function render() {
   if (!isGridView) {
     tableView.style.display = 'block';
@@ -116,7 +209,7 @@ function render() {
     tableBody.innerHTML = filteredSongs.map(item => {
       const playingClass = item.id === currentPlayingId ? 'playing' : '';
       const thumbSrc = getRelativeThumb(item.thumbnail);
-      const badge = item._matched
+      const matchBadge = item._matched
         ? '<span class="badge badge-ok">Matched</span>'
         : '<span class="badge badge-warn">Check Match</span>';
 
@@ -129,14 +222,16 @@ function render() {
               <div class="play-overlay">${item.id === currentPlayingId ? '🔊' : '▶'}</div>
             </div>
           </td>
+          <td>${renderFlagBadge(item)}</td>
           <td>
             <div class="song-title">${escapeHtml(item.name)}</div>
             <div class="song-artist">${escapeHtml(item.Artist)}</div>
           </td>
           <td>
             <div class="yt-title">${escapeHtml(item.yt_title)}</div>
-            ${badge}
+            ${matchBadge}
           </td>
+          <td>${renderNotesButton(item)}</td>
           <td>
             <a class="yt-link" href="${escapeHtml(item.yt_link)}" target="_blank" rel="noopener">
               ${escapeHtml(item.yt_link)}
@@ -144,8 +239,8 @@ function render() {
           </td>
           <td>
             <div class="row-actions">
-              <button class="btn btn-sm" onclick="playSong(${item.id})">▶ Play</button>
-              <button class="btn btn-sm" onclick="openEditModal(${item.id})">✎ Edit</button>
+              <button class="btn btn-sm" onclick="playSong(${item.id})">▶</button>
+              <button class="btn btn-sm" onclick="openEditModal(${item.id})">✎</button>
             </div>
           </td>
         </tr>
@@ -157,7 +252,7 @@ function render() {
     gridView.innerHTML = filteredSongs.map(item => {
       const playingClass = item.id === currentPlayingId ? 'playing' : '';
       const thumbSrc = getRelativeThumb(item.thumbnail);
-      const badge = item._matched
+      const matchBadge = item._matched
         ? '<span class="badge badge-ok">Matched</span>'
         : '<span class="badge badge-warn">Check Match</span>';
 
@@ -168,13 +263,19 @@ function render() {
             <div class="play-overlay" style="opacity:1;background:rgba(0,0,0,0.3);">${item.id === currentPlayingId ? '🔊' : '▶'}</div>
           </div>
           <div class="card-body">
-            <div class="card-id">#${String(item.id).padStart(3, '0')} • ${badge}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span class="card-id">#${String(item.id).padStart(3, '0')} • ${matchBadge}</span>
+              ${renderFlagBadge(item)}
+            </div>
             <div class="song-title">${escapeHtml(item.name)}</div>
             <div class="song-artist">${escapeHtml(item.Artist)}</div>
             <div class="yt-title" style="font-size:0.78rem;color:var(--subtext);">YT: ${escapeHtml(item.yt_title)}</div>
-            <div class="row-actions" style="margin-top:auto;padding-top:8px;">
-              <a class="btn btn-sm" href="${escapeHtml(item.yt_link)}" target="_blank" rel="noopener">YouTube ↗</a>
-              <button class="btn btn-sm" onclick="openEditModal(${item.id})">Edit</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:auto; padding-top:10px;">
+              ${renderNotesButton(item)}
+              <div class="row-actions">
+                <a class="btn btn-sm" href="${escapeHtml(item.yt_link)}" target="_blank" rel="noopener">YT ↗</a>
+                <button class="btn btn-sm" onclick="openEditModal(${item.id})">Edit</button>
+              </div>
             </div>
           </div>
         </div>
@@ -182,6 +283,17 @@ function render() {
     }).join('');
   }
 }
+
+window.toggleFlag = function(id) {
+  const item = songs.find(s => s.id === id);
+  if (!item) return;
+  item.flag = (item.flag === 'work needed') ? 'ok' : 'work needed';
+  saveToLocalStorage();
+  applyFilters();
+  if (currentNoteSongId === id) {
+    renderNotesModalFlag();
+  }
+};
 
 window.playSong = function(id) {
   const item = songs.find(s => s.id === id);
@@ -207,18 +319,103 @@ document.getElementById('prevBtn').addEventListener('click', () => playAdjacent(
 document.getElementById('nextBtn').addEventListener('click', () => playAdjacent(1));
 audioPlayer.addEventListener('ended', () => playAdjacent(1));
 
-// Edit Modal logic
-const editModal = document.getElementById('editModal');
+// ==================== NOTES MODAL LOGIC ====================
+function renderNotesModalFlag() {
+  const song = songs.find(s => s.id === currentNoteSongId);
+  if (!song) return;
+  notesModalFlagWrap.innerHTML = `
+    <span style="font-size:0.8rem; color:var(--subtext); margin-right:6px;">Flag:</span>
+    ${renderFlagBadge(song)}
+  `;
+}
+
+function renderNotesList() {
+  const songNotes = getSongNotes(currentNoteSongId);
+  if (songNotes.length === 0) {
+    notesList.innerHTML = `
+      <div style="text-align:center; padding:24px 12px; color:var(--subtext); font-size:0.88rem;">
+        No notes yet for this song.<br>Add a note below to record what needs changing.
+      </div>
+    `;
+    return;
+  }
+
+  notesList.innerHTML = songNotes.map(n => {
+    const dateStr = n.created_at ? new Date(n.created_at).toLocaleString() : '';
+    return `
+      <div class="note-item" data-note-id="${n.id}">
+        <div class="note-content">
+          <div>${escapeHtml(n.text)}</div>
+          <div class="note-time">${escapeHtml(dateStr)}</div>
+        </div>
+        <button class="note-delete-btn" onclick="deleteNote(${n.id})" title="Delete Note">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+
+window.openNotesModal = function(id) {
+  const song = songs.find(s => s.id === id);
+  if (!song) return;
+  currentNoteSongId = id;
+  notesModalTitle.textContent = `#${String(song.id).padStart(3, '0')} ${song.name} - ${song.Artist}`;
+  renderNotesModalFlag();
+  renderNotesList();
+  newNoteText.value = '';
+  notesModal.classList.add('open');
+  setTimeout(() => newNoteText.focus(), 50);
+};
+
+closeNotesModalBtn.addEventListener('click', () => {
+  notesModal.classList.remove('open');
+  currentNoteSongId = null;
+});
+
+addNoteBtn.addEventListener('click', () => {
+  const text = newNoteText.value.trim();
+  if (!text || !currentNoteSongId) return;
+
+  const song = songs.find(s => s.id === currentNoteSongId);
+  if (!song) return;
+
+  // 1. Add Note to notes collection (1-n)
+  const newNote = {
+    id: Date.now(),
+    song_id: currentNoteSongId,
+    text: text,
+    created_at: new Date().toISOString()
+  };
+  notes.push(newNote);
+
+  // 2. Automatically set flag to "work needed"
+  song.flag = 'work needed';
+
+  saveToLocalStorage();
+  renderNotesModalFlag();
+  renderNotesList();
+  newNoteText.value = '';
+  applyFilters();
+});
+
+window.deleteNote = function(noteId) {
+  notes = notes.filter(n => n.id !== noteId);
+  saveToLocalStorage();
+  renderNotesList();
+  applyFilters();
+};
+
+// ==================== EDIT MODAL LOGIC ====================
 window.openEditModal = function(id) {
   const item = songs.find(s => s.id === id);
   if (!item) return;
   document.getElementById('modalTitle').textContent = `Edit Song #${item.id}`;
-  document.getElementById('editId').value = item.id;
-  document.getElementById('editName').value = item.name;
-  document.getElementById('editArtist').value = item.Artist;
-  document.getElementById('editYtTitle').value = item.yt_title;
-  document.getElementById('editYtLink').value = item.yt_link;
-  document.getElementById('editThumbnail').value = item.thumbnail;
+  editId.value = item.id;
+  editFlag.value = item.flag || 'ok';
+  editName.value = item.name;
+  editArtist.value = item.Artist;
+  editYtTitle.value = item.yt_title;
+  editYtLink.value = item.yt_link;
+  editThumbnail.value = item.thumbnail;
   editModal.classList.add('open');
 };
 
@@ -227,43 +424,42 @@ document.getElementById('cancelEditBtn').addEventListener('click', () => {
 });
 
 document.getElementById('saveEditBtn').addEventListener('click', () => {
-  const id = Number(document.getElementById('editId').value);
+  const id = Number(editId.value);
   const item = songs.find(s => s.id === id);
   if (item) {
-    item.name = document.getElementById('editName').value.trim();
-    item.Artist = document.getElementById('editArtist').value.trim();
-    item.yt_title = document.getElementById('editYtTitle').value.trim();
-    item.yt_link = document.getElementById('editYtLink').value.trim();
-    item.thumbnail = document.getElementById('editThumbnail').value.trim();
+    item.flag = editFlag.value;
+    item.name = editName.value.trim();
+    item.Artist = editArtist.value.trim();
+    item.yt_title = editYtTitle.value.trim();
+    item.yt_link = editYtLink.value.trim();
+    item.thumbnail = editThumbnail.value.trim();
   }
   editModal.classList.remove('open');
+  saveToLocalStorage();
   applyFilters();
 });
 
 document.getElementById('deleteSongBtn').addEventListener('click', () => {
-  const id = Number(document.getElementById('editId').value);
+  const id = Number(editId.value);
   if (confirm(`Remove song #${id} from list?`)) {
     songs = songs.filter(s => s.id !== id);
+    notes = notes.filter(n => n.song_id !== id);
     editModal.classList.remove('open');
+    saveToLocalStorage();
     applyFilters();
   }
 });
 
-// Save or export updated songs.json
-document.getElementById('exportBtn').addEventListener('click', async () => {
-  const cleanList = songs.map(({ id, name, Artist, yt_title, yt_link, thumbnail }) => ({
-    id, name, Artist, yt_title, yt_link, thumbnail
-  }));
-  const jsonText = JSON.stringify(cleanList, null, 2);
-
+// ==================== SAVE JSON FILES ====================
+async function downloadOrSaveFile(filename, content) {
   if (window.showSaveFilePicker) {
     try {
       const handle = await window.showSaveFilePicker({
-        suggestedName: 'songs.json',
+        suggestedName: filename,
         types: [{ description: 'JSON File', accept: { 'application/json': ['.json'] } }]
       });
       const writable = await handle.createWritable();
-      await writable.write(jsonText);
+      await writable.write(content);
       await writable.close();
       return;
     } catch (err) {
@@ -271,27 +467,24 @@ document.getElementById('exportBtn').addEventListener('click', async () => {
     }
   }
 
-  const blob = new Blob([jsonText], { type: 'application/json' });
+  const blob = new Blob([content], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'songs.json';
+  a.download = filename;
   a.click();
+}
+
+// Save songs.json
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const cleanList = songs.map(({ id, flag, name, Artist, yt_title, yt_link, thumbnail }) => ({
+    id, flag: flag || 'ok', name, Artist, yt_title, yt_link, thumbnail
+  }));
+  downloadOrSaveFile('songs.json', JSON.stringify(cleanList, null, 2));
 });
 
-// Import custom JSON
-document.getElementById('importFile').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      songs = JSON.parse(reader.result);
-      applyFilters();
-    } catch (err) {
-      alert('Invalid JSON file');
-    }
-  };
-  reader.readAsText(file);
+// Save notes.json
+document.getElementById('saveNotesBtn').addEventListener('click', () => {
+  downloadOrSaveFile('notes.json', JSON.stringify(notes, null, 2));
 });
 
 searchInput.addEventListener('input', applyFilters);
@@ -302,4 +495,4 @@ toggleViewBtn.addEventListener('click', () => {
   render();
 });
 
-loadSongs();
+loadData();

@@ -101,6 +101,19 @@ def main():
 
     records.sort(key=lambda r: r["id"])
 
+    # Preserve existing flags if songs.json already exists
+    existing_flags = {}
+    if json_path.exists():
+        try:
+            for s in json.loads(json_path.read_text(encoding="utf-8")):
+                if "id" in s and "flag" in s:
+                    existing_flags[s["id"]] = s["flag"]
+        except Exception:
+            pass
+
+    for r in records:
+        r["flag"] = existing_flags.get(r["id"], "ok")
+
     # Write JSON list and JS fallback for direct file:// opening
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(records, f, ensure_ascii=False, indent=2)

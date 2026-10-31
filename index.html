@@ -13,20 +13,22 @@
       <div class="brand-icon">♪</div>
       <div>
         <h1>Spotify -> MP3 Library Manager</h1>
-        <p>Manage data/songs.json, preview local MP3s & inspect YouTube matches</p>
+        <p>Manage data/songs.json & data/notes.json, preview local MP3s & flags</p>
       </div>
     </div>
 
     <div class="controls">
-      <input type="search" id="searchInput" placeholder="Search song, artist, YouTube title, or #ID..." />
+      <input type="search" id="searchInput" placeholder="Search song, artist, YouTube title, notes, or #ID..." />
       <select id="filterSelect">
         <option value="all">All Songs</option>
+        <option value="work_needed">⚠️ Flag: Work Needed</option>
+        <option value="flag_ok">✅ Flag: OK</option>
+        <option value="has_notes">📝 Has Notes</option>
         <option value="matched">Verified Title Match</option>
         <option value="mismatch">Potential Mismatch (Review)</option>
       </select>
       <button class="btn" id="toggleViewBtn">Grid View</button>
-      <label class="btn" for="importFile" style="cursor:pointer;">Import JSON</label>
-      <input type="file" id="importFile" accept=".json" style="display:none;" />
+      <button class="btn" id="saveNotesBtn">Save notes.json</button>
       <button class="btn btn-primary" id="exportBtn">Save songs.json</button>
     </div>
   </header>
@@ -34,6 +36,8 @@
   <div class="stats-bar">
     <div class="stat-pill">Total Songs: <strong id="statTotal">0</strong></div>
     <div class="stat-pill">Showing: <strong id="statShowing">0</strong></div>
+    <div class="stat-pill warn">Work Needed: <strong id="statWorkNeeded">0</strong></div>
+    <div class="stat-pill">Total Notes: <strong id="statNotes">0</strong></div>
     <div class="stat-pill warn">Potential Mismatches: <strong id="statMismatch">0</strong></div>
   </div>
 
@@ -44,8 +48,10 @@
           <tr>
             <th>#</th>
             <th class="thumb-cell">Cover</th>
+            <th>Flag</th>
             <th>Spotify Song & Artist</th>
             <th>YouTube Downloaded Title</th>
+            <th>Notes</th>
             <th>YouTube Link</th>
             <th>Actions</th>
           </tr>
@@ -72,11 +78,39 @@
     </div>
   </div>
 
+  <!-- Notes Modal -->
+  <div class="modal-backdrop" id="notesModal">
+    <div class="modal" style="max-width: 580px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:10px;">
+        <h2 id="notesModalTitle" style="margin-bottom:0; font-size:1.05rem;">Notes</h2>
+        <div id="notesModalFlagWrap"></div>
+      </div>
+      <div class="notes-list" id="notesList"></div>
+      <div class="note-add-wrap">
+        <textarea id="newNoteText" placeholder="Write a note about what to change (e.g., 'wrong version', 'find higher bitrate', 're-download audio')..."></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+          <span style="font-size:0.75rem; color:var(--subtext);">Adding a note automatically sets Flag to <strong>Work Needed</strong></span>
+          <div style="display:flex; gap:8px;">
+            <button class="btn" id="closeNotesModalBtn">Close</button>
+            <button class="btn btn-primary" id="addNoteBtn">+ Add Note</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Edit Modal -->
   <div class="modal-backdrop" id="editModal">
     <div class="modal">
       <h2 id="modalTitle">Edit Song</h2>
       <input type="hidden" id="editId" />
+      <div class="form-group">
+        <label>Flag Status</label>
+        <select id="editFlag">
+          <option value="ok">OK</option>
+          <option value="work needed">Work Needed</option>
+        </select>
+      </div>
       <div class="form-group">
         <label>Song Name</label>
         <input type="text" id="editName" />
@@ -107,6 +141,7 @@
 
   <!-- Fallback data for direct file:// opening without a web server -->
   <script src="data/songs_data.js"></script>
+  <script src="data/notes_data.js"></script>
   <script src="assets/app.js"></script>
 </body>
 </html>
