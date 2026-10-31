@@ -1,1 +1,1 @@
-window.NOTES_DATA = [];
+window.NOTES_DATA = [{"id": 1793467093300, "song_id": 7, "text": "find another youtube video cause this have a openning sound, find another one only including music, may add lyric to the searching", "created_at": "2026-10-31T17:18:13.300Z"}];

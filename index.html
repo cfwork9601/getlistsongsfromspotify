@@ -21,6 +21,7 @@
       <input type="search" id="searchInput" placeholder="Search song, artist, YouTube title, notes, or #ID..." />
       <select id="filterSelect">
         <option value="all">All Songs</option>
+        <option value="check_needed">🔍 Flag: Check Needed</option>
         <option value="work_needed">⚠️ Flag: Work Needed</option>
         <option value="flag_ok">✅ Flag: OK</option>
         <option value="has_notes">📝 Has Notes</option>
@@ -36,6 +37,7 @@
   <div class="stats-bar">
     <div class="stat-pill">Total Songs: <strong id="statTotal">0</strong></div>
     <div class="stat-pill">Showing: <strong id="statShowing">0</strong></div>
+    <div class="stat-pill info">Check Needed: <strong id="statCheckNeeded">0</strong></div>
     <div class="stat-pill warn">Work Needed: <strong id="statWorkNeeded">0</strong></div>
     <div class="stat-pill">Total Notes: <strong id="statNotes">0</strong></div>
     <div class="stat-pill warn">Potential Mismatches: <strong id="statMismatch">0</strong></div>
@@ -109,6 +111,7 @@
         <select id="editFlag">
           <option value="ok">OK</option>
           <option value="work needed">Work Needed</option>
+          <option value="check needed">Check Needed</option>
         </select>
       </div>
       <div class="form-group">

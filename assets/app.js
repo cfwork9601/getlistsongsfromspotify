@@ -91,20 +91,7 @@ function getSongNotes(songId) {
 }
 
 async function loadData() {
-  // 1. Try local storage first for working drafts
-  const localSongs = localStorage.getItem('gls_songs');
-  const localNotes = localStorage.getItem('gls_notes');
-
-  if (localSongs && localNotes) {
-    try {
-      songs = JSON.parse(localSongs);
-      notes = JSON.parse(localNotes);
-      applyFilters();
-      return;
-    } catch (e) {}
-  }
-
-  // 2. Fetch songs.json
+  // 1. Fetch latest songs.json (or window.SONGS_DATA for file://)
   try {
     const res = await fetch('data/songs.json');
     if (res.ok) {
@@ -116,12 +103,12 @@ async function loadData() {
     if (window.SONGS_DATA) songs = window.SONGS_DATA;
   }
 
-  // Ensure default flag
+  // Ensure default flag if missing
   songs.forEach(s => {
     if (!s.flag) s.flag = 'ok';
   });
 
-  // 3. Fetch notes.json
+  // 2. Fetch latest notes.json (or window.NOTES_DATA for file://)
   try {
     const resNotes = await fetch('data/notes.json');
     if (resNotes.ok) {
@@ -143,14 +130,17 @@ function applyFilters() {
 
   let mismatchCount = 0;
   let workNeededCount = 0;
+  let checkNeededCount = 0;
 
   songs.forEach(s => {
     s._matched = isLikelyMatch(s);
     if (!s._matched) mismatchCount++;
     if (s.flag === 'work needed') workNeededCount++;
+    if (s.flag === 'check needed') checkNeededCount++;
   });
 
   filteredSongs = songs.filter(s => {
+    if (mode === 'check_needed' && s.flag !== 'check needed') return false;
     if (mode === 'work_needed' && s.flag !== 'work needed') return false;
     if (mode === 'flag_ok' && s.flag !== 'ok') return false;
     if (mode === 'has_notes' && getSongNotes(s.id).length === 0) return false;
@@ -172,6 +162,7 @@ function applyFilters() {
 
   document.getElementById('statTotal').textContent = songs.length;
   document.getElementById('statShowing').textContent = filteredSongs.length;
+  document.getElementById('statCheckNeeded').textContent = checkNeededCount;
   document.getElementById('statWorkNeeded').textContent = workNeededCount;
   document.getElementById('statNotes').textContent = notes.length;
   document.getElementById('statMismatch').textContent = mismatchCount;
@@ -188,10 +179,16 @@ function escapeHtml(str) {
 }
 
 function renderFlagBadge(item) {
-  const isWork = item.flag === 'work needed';
-  const cls = isWork ? 'flag-work' : 'flag-ok';
-  const text = isWork ? '⚠️ Work Needed' : '✅ OK';
-  return `<span class="flag-pill ${cls}" onclick="toggleFlag(${item.id})" title="Click to toggle Flag">${text}</span>`;
+  let cls = 'flag-ok';
+  let text = '✅ OK';
+  if (item.flag === 'work needed') {
+    cls = 'flag-work';
+    text = '⚠️ Work Needed';
+  } else if (item.flag === 'check needed') {
+    cls = 'flag-check';
+    text = '🔍 Check Needed';
+  }
+  return `<span class="flag-pill ${cls}" onclick="toggleFlag(${item.id})" title="Click to cycle Flag (ok -> work needed -> check needed)">${text}</span>`;
 }
 
 function renderNotesButton(item) {
@@ -284,10 +281,27 @@ function render() {
   }
 }
 
+window.setFlag = function(id, newFlag) {
+  const item = songs.find(s => s.id === id);
+  if (!item) return;
+  item.flag = newFlag;
+  saveToLocalStorage();
+  applyFilters();
+  if (currentNoteSongId === id) {
+    renderNotesModalFlag();
+  }
+};
+
 window.toggleFlag = function(id) {
   const item = songs.find(s => s.id === id);
   if (!item) return;
-  item.flag = (item.flag === 'work needed') ? 'ok' : 'work needed';
+  if (item.flag === 'ok') {
+    item.flag = 'work needed';
+  } else if (item.flag === 'work needed') {
+    item.flag = 'check needed';
+  } else {
+    item.flag = 'ok';
+  }
   saveToLocalStorage();
   applyFilters();
   if (currentNoteSongId === id) {
@@ -324,8 +338,12 @@ function renderNotesModalFlag() {
   const song = songs.find(s => s.id === currentNoteSongId);
   if (!song) return;
   notesModalFlagWrap.innerHTML = `
-    <span style="font-size:0.8rem; color:var(--subtext); margin-right:6px;">Flag:</span>
-    ${renderFlagBadge(song)}
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+      <span style="font-size:0.75rem; color:var(--subtext);">Flag:</span>
+      ${renderFlagBadge(song)}
+      <button class="btn btn-sm" onclick="setFlag(${song.id}, 'check needed')" style="font-size:0.72rem; padding:3px 8px; color:#60a5fa;" title="Mark as check needed">Set Check Needed</button>
+      <button class="btn btn-sm" onclick="setFlag(${song.id}, 'ok')" style="font-size:0.72rem; padding:3px 8px; color:#4ade80;" title="Mark as OK">Set OK</button>
+    </div>
   `;
 }
 
