@@ -4,6 +4,7 @@ import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from mutagen.id3 import ID3, TIT2, TPE1, APIC, ID3NoHeaderError
 
 
 def sanitize_filename(name: str) -> str:
@@ -11,6 +12,38 @@ def sanitize_filename(name: str) -> str:
     sanitized = re.sub(r'["*/:<>?\\|]', "_", name)
     sanitized = re.sub(r"\s+", " ", sanitized).strip().rstrip(".")
     return sanitized
+
+
+def apply_clean_metadata(mp3_path: Path, query: str):
+    """Ensure the MP3 only contains Title, Artist, and Cover Thumbnail."""
+    if " - " in query:
+        title, artist = query.rsplit(" - ", 1)
+    else:
+        title, artist = query, ""
+
+    try:
+        audio = ID3(mp3_path)
+    except ID3NoHeaderError:
+        audio = ID3()
+
+    # Extract existing thumbnail APIC if yt-dlp embedded it
+    existing_apic = None
+    for k in list(audio.keys()):
+        if k.startswith("APIC"):
+            existing_apic = audio[k]
+            break
+
+    # Wipe all other clutter (descriptions, dates, comments, etc.)
+    audio.clear()
+
+    if title:
+        audio.add(TIT2(encoding=3, text=title.strip()))
+    if artist:
+        audio.add(TPE1(encoding=3, text=artist.strip()))
+    if existing_apic:
+        audio.add(existing_apic)
+
+    audio.save(mp3_path, v2_version=3)
 
 
 def parse_result_file(result_path: Path):
@@ -49,10 +82,12 @@ def download_single_song(idx: int, query: str, output_dir: Path) -> tuple[int, s
     for search_query in queries_to_try:
         cmd = [
             "yt-dlp",
+            "--cookies-from-browser", "chrome",
+            "--remote-components", "ejs:github",
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "0",
-            "--embed-metadata",
+            "--embed-thumbnail",
             "--windows-filenames",
             "--no-playlist",
             "--no-warnings",
@@ -64,6 +99,7 @@ def download_single_song(idx: int, query: str, output_dir: Path) -> tuple[int, s
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
             if proc.returncode == 0 and final_mp3.exists():
+                apply_clean_metadata(final_mp3, query)
                 return (idx, query, True, "downloaded")
             err = (proc.stderr or proc.stdout or f"exit code {proc.returncode}").strip().splitlines()
             last_err = err[-1] if err else "unknown error"
