@@ -26,7 +26,8 @@ getlistsongsfromspotify/
 └── scripts/                    # Occasional Python CLI utilities
     ├── parse_songs.py          # Parses data/imports/list.txt -> data/imports/result.txt
     ├── download_songs.py       # Downloads MP3s from result.txt -> media/songs/
-    └── build_metadata.py       # Extracts metadata & thumbnails -> data/songs.json
+    ├── build_metadata.py       # Extracts metadata & thumbnails -> data/songs.json
+    └── update_tags.py          # Syncs internal ID3 tags (Title, Artist) from songs.json
 ```
 
 ---
